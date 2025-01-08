@@ -23,33 +23,62 @@ import pandas as pd
         
 class Telescope:
 
-    def __init__(self, telescope, num_samples):
+    def __init__(self, telescope, num_samples=None, ra_pointings=None, dec_pointings=None, myopsim='../data/OpSim_databases/baseline_v3.0_10yrs.db'):
         """
         This class defines the telescope properties.
 
-        :param telescope: choose between 'LSST' and 'ZTF'
+        :param telescope: choose between 'LSST', 'ZTF', and 'DECam'
         :param num_samples: total number of lens systems to be generated (int)
         """
 
         self.telescope = telescope
-        self.bandpasses = ['g', 'r', 'i', 'z', 'y']
 
         if telescope == 'LSST':
+            self.bandpasses = ['g', 'r', 'i', 'z', 'y']
             self.exp_time = 30                   # seconds
             self.num_exposures = 1
             self.numPix = 48                     # cutout pixel size
             self.deltaPix = 0.2                  # pixel size in arcsec (area per pixel = deltaPix**2)
             self.psf_type = 'GAUSSIAN'           # 'GAUSSIAN', 'PIXEL', 'NONE'
             self.patch_size = self.deltaPix * self.numPix
+            self.use_opsim = True
+
+        elif telescope == 'ZTF':
+            self.bandpasses = ['g', 'r', 'i']
+            self.use_opsim = True
+
+        elif telescope == 'HST':
+            self.bandpasses = ['uvf475w', 'uvf555w', 'uvf606w', 'uvf625w', 'uvf775w', 'uvf814w',
+                               'f098m', 'f105w', 'f110w', 'f125w', 'f127m', 'f139m', 'f140w', 'f153m', 'f160w']
+            self.use_opsim = False
+
+        elif telescope == 'JWST':
+            self.bandpasses = ['f070w', 'f090w', 'f115w', 'f150w', 'f200w', 'f277w', 'f356w', 'f444w',
+                               'f140m', 'f162m', 'f182m', 'f210m', 'f250m', 'f300m', 'f335m', 'f360m', 'f410m', 'f430m', 'f460m', 'f480m',
+                               'f560w', 'f770w', 'f1000w', 'f1130w', 'f1280w', 'f1500w', 'f1800w', 'f2100w', 'f2550w']
+            self.use_opsim = False
+
+        elif telescope == 'DECam':
+            self.bandpasses = ['g', 'r', 'i', 'z']
+            self.use_opsim = False
+
+        else:
+            raise KeyError("The telescope you specified has not been implemented in lensedSST yet. Please choose from 'LSST', 'ZTF', 'HST', 'JWST', and 'DES'!")
 
         # Create telescope sky pointings
-        ra_pointings, dec_pointings = self.create_sky_pointings(N=num_samples)
+        if ra_pointings is None:
+            if num_samples is None:
+                raise ValueError("If you do not specify a list of ra_pointings and dec_pointings, you need to specify with 'num_samples' how many systems you would like to generate.")
+            ra_pointings, dec_pointings = self.create_sky_pointings(N=num_samples)
+        else:
+            if dec_pointings is None:
+                raise ValueError("If you specify a list of ra_pointings, you need to also specify a list of dec_pointings.")
 
-        # Initialise OpSim Summary (SynOpSim) generator
-        print("Setting up OpSim Summary generator...")
-        self.gen = self.initialise_opsim_summary(ra_pointings, dec_pointings)
-
-        # Create: elif telescope == 'ZTF'
+        if self.use_opsim:
+            # Initialise OpSim Summary (SynOpSim) generator
+            print("Setting up OpSim Summary generator...")
+            self.gen = self.initialise_opsim_summary(myopsim, ra_pointings, dec_pointings)
+            
 
     def single_band_properties(self, band):
         """
@@ -104,8 +133,67 @@ class Telescope:
                 obs_dict = LSST_y
             else:
                 raise ValueError("band %s not supported! Choose 'g', 'r', 'i', 'z' or 'y' for LSST." % band)
+        
+        #elif self.telescope == 'ZTF':
+            
+        elif self.telescope == 'JWST':
+            JWST_f115w = {'magnitude_zero_point': 28.0,
+                          'limiting_magnitude': 30.0}
+            
+            JWST_f356w = {'magnitude_zero_point': 28.0,
+                          'limiting_magnitude': 30.0}
+            
+            if band == 'f115w':
+                obs_dict = JWST_f115w
+            elif band == 'f356w':
+                obs_dict = JWST_f356w
+            else:
+                raise ValueError("band %s not supported right now! The JWST telescope class is in testing phase and does not have complete functionality." % band)
 
-        # Create elif self.telescope == 'ZTF'
+            zero_point = obs_dict['magnitude_zero_point']
+            limiting_magnitude = obs_dict['limiting_magnitude']
+
+            return None, limiting_magnitude, None, zero_point, None
+        
+        #elif self.telescope == 'HST':
+            
+        elif self.telescope == 'DECam':
+
+            # https://ui.adsabs.harvard.edu/abs/2024MNRAS.535.3307G/abstract
+            # https://ui.adsabs.harvard.edu/abs/2022TNSAN..24....1R/abstract
+
+            DECam_g = {'magnitude_zero_point': 0.,
+                       'average_seeing': 0.,
+                       'sky_brightness': 0.,
+                       'limiting_magnitude': 0.}
+
+            DECam_r = {'magnitude_zero_point': 0.,
+                       'average_seeing': 0.,
+                       'sky_brightness': 0.,
+                       'limiting_magnitude': 0.}
+            
+            DECam_i = {'magnitude_zero_point': 0.,
+                       'average_seeing': 0.,
+                       'sky_brightness': 0.,
+                       'limiting_magnitude': 0.}
+            
+            DECam_z = {'magnitude_zero_point': 0.,
+                       'average_seeing': 0.,
+                       'sky_brightness': 0.,
+                       'limiting_magnitude': 0.}
+
+            if band == 'g':
+                obs_dict = DECam_g
+            elif band == 'r':
+                obs_dict = DECam_r
+            elif band == 'i':
+                obs_dict = DECam_i
+            elif band == 'z':
+                obs_dict = DECam_z
+            else:
+                raise ValueError("band %s not supported! Choose 'g', 'r', 'i', or 'z' for DECam." % band)
+
+            return None, limiting_magnitude, None, zero_point, None
 
         zero_point = obs_dict['magnitude_zero_point']
         average_seeing = obs_dict['average_seeing']
@@ -164,11 +252,12 @@ class Telescope:
 
         return amp
 
-    def load_z_theta(self, theta_min=0.1, zsrc_max=1.5):
+    def load_z_theta(self, z_theta_dict_path, theta_min=0.1, zsrc_max=1.5):
         """
         Download joint distribution of source redshift, lens redshift and Einstein radius for configurations where
         strong lensing occurs. Distribution is obtained from the lensed supernova simulation by Wojtek et al. (2019).
 
+        :param z_theta_dict_path: path to dictionary with redshifts/einstein radii
         :param theta_min: minimum accepted value of the einstein radius
         :param zsrc_max: maximum accepted value of the source redshift
         :return: z_source_list_: array containing ~ 400,000 values of the source redshift
@@ -176,7 +265,7 @@ class Telescope:
                  theta_E_list_: array containing ~ 400,000 values of the einstein radius
         """
 
-        zlens_zSN_theta = np.load("../data/sample_zl_zsn_theta.npz")['zlens_zSN_theta']
+        zlens_zSN_theta = np.load(z_theta_dict_path)['zlens_zSN_theta']
         zlens_zSN_theta = np.repeat(zlens_zSN_theta, 3, axis=0)
 
         z_source_list_ = []
@@ -217,17 +306,15 @@ class Telescope:
 
         return ra_points, dec_points
 
-    def initialise_opsim_summary(self, ra_pointings, dec_pointings):
+    def initialise_opsim_summary(self, myopsim, ra_pointings, dec_pointings):
         """
         Itialise the generator for OpSim Summary SynOpSim. This will allow to draw random cadence realisations.
+        :param myopsim: path to the OpSim database used for the cadence realisations
         :param ra_pointings: array with the x-coordinates (right ascension) of random sky pointings
         :param dec_pointings: array with the y-coordinates (declination) of random sky pointings
         :return: OpSim Summary generator for a given OpSim database and sky pointings
         """
-        # Location of the OpSim database used for the cadence realisations
-        myopsimv3 = '../data/OpSim_databases/baseline_v3.0_10yrs.db'
-
-        synopsim = SynOpSim.fromOpSimDB(myopsimv3, opsimversion='fbsv2', usePointingTree=True, use_proposal_table=False,
+        synopsim = SynOpSim.fromOpSimDB(myopsim, opsimversion='fbsv2', usePointingTree=True, use_proposal_table=False,
                                   subset='unique_all')
 
         gen = synopsim.pointingsEnclosing(ra_pointings, dec_pointings, circRadius=0., pointingRadius=1.75,
@@ -376,7 +463,7 @@ class Telescope:
         else:
             survey = 'WFD'
 
-            if obs_start <= 60768:
+            if obs_start <= 60768 + 670:
                 rolling = 'no rolling'
 
             else:
@@ -403,14 +490,14 @@ class Telescope:
 
         return flux_skysig, lim_mag
 
-    def plot_redshifts(self):
+    def plot_redshifts(self, z_theta_dict_path='../data/sample_zl_zsn_theta.npz'):
         """
         Plot the distributions of the lens and the source redshifts for the lensed supernovae.
 
         :return: a plot displaying a KDE of the source and lens redshift distributions
         """
 
-        z_source_list_, z_lens_list_, theta_E_list_ = self.load_z_theta(theta_min=0.05)
+        z_source_list_, z_lens_list_, theta_E_list_ = self.load_z_theta(z_theta_dict_path, theta_min=0.05)
 
         fig, ax = plt.subplots(1, 1, figsize=(8, 4))
         sns.kdeplot(z_lens_list_, ax=ax, lw=3, color="#2e6edb", fill=True, label="Lens redshift")

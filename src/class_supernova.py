@@ -13,7 +13,7 @@ import time
 
 class Supernova:
 
-    def __init__(self, theta_E, z_lens, z_source, cosmo, source_x, source_y):
+    def __init__(self, theta_E, z_lens, z_source, cosmo, source_x, source_y, num_images, differential_dust=False):
         """
         This class defines the supernova whose light is gravitationally lensed by the lens galaxy.
 
@@ -31,6 +31,8 @@ class Supernova:
         self.cosmo = cosmo
         self.source_x = source_x
         self.source_y = source_y
+        self.num_images = num_images
+        self.differential_dust = differential_dust
 
     def get_image_pos_magnification(self, lens_model_class, kwargs_lens):
         """
@@ -111,6 +113,9 @@ class Supernova:
                 sncosmo_filter = 'lsstz'
             elif band == 'y':
                 sncosmo_filter = 'lssty'
+
+        elif telescope == 'JWST':
+            sncosmo_filter = band
 
         # Create elif telescope == 'ZTF'
 
@@ -347,7 +352,7 @@ class Supernova:
         M_observed = - Alpha * x1 + Beta * c + M_corrected
         return M_observed
 
-    def light_curve(self, z_source):
+    def light_curve(self, x1=None, c=None, mw_ebv=None, host_rv=None, host_ebv=None, lens_rv=None, lens_ebv=None, int_scatter=True):
         """
         Samples light curve parameters from stretch and colour distributions based on Scolnic & Kessler (2016)
         and returns a type Ia SN light curve model from SNcosmo using the SALT3 model.
@@ -357,23 +362,63 @@ class Supernova:
                  observed absolute magnitude
         """
         H_0 = self.cosmo.H(0).value
-        dustmodel = sncosmo.F99Dust(r_v=3.1)
-        model = sncosmo.Model(source='salt3', effects=[dustmodel], effect_names=['mw'], effect_frames=['obs'])
         H_0_fid = 74.03                                      # SH0ES 2019 value
         M_fid = -19.24                                       # Absolute magnitude corresponding to SH0ES 2019 H0 value
 
-        MW_dust = np.random.uniform(0, 0.2)                  # Sample E(B-V)
-        x1 = stats.skewnorm.rvs(-8.241, 1.2311, 1.6712)      # Sample stretch parameter
-        c = stats.skewnorm.rvs(2.483, -0.08938, 0.1215)      # Sample colour parameter
+        # Create MW dust object
+        mw_dustmodel = sncosmo.F99Dust(r_v=3.1)
+
+        # Sample E(B-V)_MW
+        if mw_ebv is None:
+            mw_ebv = np.random.uniform(0, 0.2)
+        
+        # Create lens dust object
+        if lens_rv is None:
+            lens_rv = 2.0
+        lens_dustmodel = sncosmo.F99Dust(r_v=lens_rv)
+
+        # Sample E(B-V)_lens
+        if self.differential_dust:
+            if lens_ebv is None:
+                lens_ebv = np.random.uniform(0, 0.2, self.num_images)
+        else:
+            if lens_ebv is None:
+                lens_ebv = np.random.uniform(0, 0.2)
+
+        # Create host dust object
+        if host_rv is None:
+            host_rv = 2.0
+        host_dustmodel = sncosmo.F99Dust(r_v=host_rv)
+
+        # Sample E(B-V)_host
+        if host_ebv is None:
+            host_ebv = np.random.uniform(0, 0.2)
+
+        # Sample stretch parameter
+        if x1 is None:
+            x1 = stats.skewnorm.rvs(-8.241, 1.2311, 1.6712)
+
+        # Sample colour parameter
+        if c is None:
+            c = stats.skewnorm.rvs(2.483, -0.08938, 0.1215)
+
         M_cosmo = 5 * np.log10(H_0 / H_0_fid) + M_fid        # Cosmology correction to absolute magnitude
-        M_corrected = np.random.normal(M_cosmo, 0.12)        # Absolute magnitude without colour/stretch correlation
+        if int_scatter:
+            M_corrected = np.random.normal(M_cosmo, 0.12)    # Absolute magnitude without colour/stretch correlation
+        else:
+            M_corrected = M_cosmo                            # (optionally without intrinsic scatter)
         M_observed = self.M_obs(x1, c, M_corrected)          # Absolute magnitude with colour/stretch correlation
 
-        model.set(z=z_source, t0=0.0, x1=x1, c=c, mwebv=MW_dust)
+        # Create sncosmo model
+        model = sncosmo.Model(source='salt3', effects=[mw_dustmodel, lens_dustmodel, host_dustmodel], effect_names=['mw', 'lens', 'host'],
+                              effect_frames=['obs', 'free', 'rest'])
+        
+        # Set model parameters
+        model.set(z=self.z_source, t0=0.0, x1=x1, c=c, mwebv=mw_ebv, lensz=self.z_lens, lensebv=lens_ebv, hostebv=host_ebv)
         model.set_source_peakabsmag(M_observed, 'bessellb', 'ab', cosmo=self.cosmo)
         x0 = model.get('x0')
         model.set(x0=x0)
-        return model, x1, c, MW_dust, M_observed
+        return model, x1, c, mw_ebv, lens_ebv, host_ebv, M_observed
 
     def get_m_lens(self, telescope):
         """
