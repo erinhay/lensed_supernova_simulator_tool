@@ -23,7 +23,7 @@ import pandas as pd
         
 class Telescope:
 
-    def __init__(self, telescope, num_samples=None, ra_pointings=None, dec_pointings=None, myopsim='../data/OpSim_databases/baseline_v3.0_10yrs.db'):
+    def __init__(self, telescope, use_opsim=True, num_samples=None, ra_pointings=None, dec_pointings=None, myopsim='../data/OpSim_databases/baseline_v3.0_10yrs.db'):
         """
         This class defines the telescope properties.
 
@@ -32,6 +32,7 @@ class Telescope:
         """
 
         self.telescope = telescope
+        self.use_opsim = use_opsim
 
         if telescope == 'LSST':
             self.bandpasses = ['g', 'r', 'i', 'z', 'y']
@@ -41,40 +42,38 @@ class Telescope:
             self.deltaPix = 0.2                  # pixel size in arcsec (area per pixel = deltaPix**2)
             self.psf_type = 'GAUSSIAN'           # 'GAUSSIAN', 'PIXEL', 'NONE'
             self.patch_size = self.deltaPix * self.numPix
-            self.use_opsim = True
 
         elif telescope == 'ZTF':
             self.bandpasses = ['g', 'r', 'i']
-            self.use_opsim = True
 
         elif telescope == 'HST':
-            self.bandpasses = ['uvf475w', 'uvf555w', 'uvf606w', 'uvf625w', 'uvf775w', 'uvf814w',
+            self.bandpasses = ['f390w', 'uvf475w', 'uvf555w', 'uvf606w', 'uvf625w', 'uvf775w', 'uvf814w',
                                'f098m', 'f105w', 'f110w', 'f125w', 'f127m', 'f139m', 'f140w', 'f153m', 'f160w']
-            self.use_opsim = False
+            self.zero_point = 28.0
 
         elif telescope == 'JWST':
             self.bandpasses = ['f070w', 'f090w', 'f115w', 'f150w', 'f200w', 'f277w', 'f356w', 'f444w',
                                'f140m', 'f162m', 'f182m', 'f210m', 'f250m', 'f300m', 'f335m', 'f360m', 'f410m', 'f430m', 'f460m', 'f480m',
                                'f560w', 'f770w', 'f1000w', 'f1130w', 'f1280w', 'f1500w', 'f1800w', 'f2100w', 'f2550w']
-            self.use_opsim = False
+            self.zero_point = 28.0
 
         elif telescope == 'DECam':
-            self.bandpasses = ['g', 'r', 'i', 'z']
-            self.use_opsim = False
+            self.bandpasses = ['g', 'r', 'i', 'z', 'y']
+            self.zero_point = 28.0
 
         else:
-            raise KeyError("The telescope you specified has not been implemented in lensedSST yet. Please choose from 'LSST', 'ZTF', 'HST', 'JWST', and 'DES'!")
-
-        # Create telescope sky pointings
-        if ra_pointings is None:
-            if num_samples is None:
-                raise ValueError("If you do not specify a list of ra_pointings and dec_pointings, you need to specify with 'num_samples' how many systems you would like to generate.")
-            ra_pointings, dec_pointings = self.create_sky_pointings(N=num_samples)
-        else:
-            if dec_pointings is None:
-                raise ValueError("If you specify a list of ra_pointings, you need to also specify a list of dec_pointings.")
+            raise KeyError("The telescope you specified has not been implemented in lensedSST yet. Please choose from 'LSST', 'ZTF', 'HST', 'JWST', and 'DECam'!")
 
         if self.use_opsim:
+            # Create telescope sky pointings
+            if ra_pointings is None:
+                if num_samples is None:
+                    raise ValueError("With use_opsim=True, if you do not specify a list of ra_pointings and dec_pointings, you need to specify with 'num_samples' how many systems you would like to generate.")
+                ra_pointings, dec_pointings = self.create_sky_pointings(N=num_samples)
+            else:
+                if dec_pointings is None:
+                    raise ValueError("If you specify a list of ra_pointings, you need to also specify a list of dec_pointings.")
+            
             # Initialise OpSim Summary (SynOpSim) generator
             print("Setting up OpSim Summary generator...")
             self.gen = self.initialise_opsim_summary(myopsim, ra_pointings, dec_pointings)
@@ -137,50 +136,26 @@ class Telescope:
         #elif self.telescope == 'ZTF':
             
         elif self.telescope == 'JWST':
-            JWST_f115w = {'magnitude_zero_point': 28.0,
-                          'limiting_magnitude': 30.0}
-            
-            JWST_f356w = {'magnitude_zero_point': 28.0,
-                          'limiting_magnitude': 30.0}
-            
-            if band == 'f115w':
-                obs_dict = JWST_f115w
-            elif band == 'f356w':
-                obs_dict = JWST_f356w
-            else:
-                raise ValueError("band %s not supported right now! The JWST telescope class is in testing phase and does not have complete functionality." % band)
-
-            zero_point = obs_dict['magnitude_zero_point']
-            limiting_magnitude = obs_dict['limiting_magnitude']
-
-            return None, limiting_magnitude, None, zero_point, None
+            return None, None, None, self.zero_point, None
         
-        #elif self.telescope == 'HST':
+        elif self.telescope == 'HST':
+            return None, None, None, self.zero_point, None
             
         elif self.telescope == 'DECam':
 
-            # https://ui.adsabs.harvard.edu/abs/2024MNRAS.535.3307G/abstract
-            # https://ui.adsabs.harvard.edu/abs/2022TNSAN..24....1R/abstract
+            # https://ui.adsabs.harvard.edu/abs/2024MNRAS.535.3307G/abstract (Melissa Graham DDF)
+            # https://ui.adsabs.harvard.edu/abs/2022TNSAN..24....1R/abstract (YSE DECam)
+            # https://ui.adsabs.harvard.edu/abs/2020AJ....160..267S/abstract (DES SN3YR)
 
-            DECam_g = {'magnitude_zero_point': 0.,
-                       'average_seeing': 0.,
-                       'sky_brightness': 0.,
-                       'limiting_magnitude': 0.}
+            DECam_g = {'limiting_magnitude': 23.5}
 
-            DECam_r = {'magnitude_zero_point': 0.,
-                       'average_seeing': 0.,
-                       'sky_brightness': 0.,
-                       'limiting_magnitude': 0.}
+            DECam_r = {'limiting_magnitude': 23.0}
             
-            DECam_i = {'magnitude_zero_point': 0.,
-                       'average_seeing': 0.,
-                       'sky_brightness': 0.,
-                       'limiting_magnitude': 0.}
+            DECam_i = {'limiting_magnitude': 23.0}
             
-            DECam_z = {'magnitude_zero_point': 0.,
-                       'average_seeing': 0.,
-                       'sky_brightness': 0.,
-                       'limiting_magnitude': 0.}
+            DECam_z = {'limiting_magnitude': 22.0}
+
+            DECam_y = {'limiting_magnitude': 21.5}
 
             if band == 'g':
                 obs_dict = DECam_g
@@ -190,10 +165,12 @@ class Telescope:
                 obs_dict = DECam_i
             elif band == 'z':
                 obs_dict = DECam_z
+            elif band == 'y':
+                obs_dict = DECam_y
             else:
-                raise ValueError("band %s not supported! Choose 'g', 'r', 'i', or 'z' for DECam." % band)
+                raise ValueError("band %s not supported! Choose 'g', 'r', 'i', 'z', or 'y' for DECam." % band)
 
-            return None, limiting_magnitude, None, zero_point, None
+            return None, obs_dict['limiting_magnitude'], None, self.zero_point, None
 
         zero_point = obs_dict['magnitude_zero_point']
         average_seeing = obs_dict['average_seeing']

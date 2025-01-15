@@ -103,19 +103,16 @@ class Supernova:
         """
 
         if telescope == 'LSST':
-            if band == 'g':
-                sncosmo_filter = 'lsstg'
-            elif band == 'r':
-                sncosmo_filter = 'lsstr'
-            elif band == 'i':
-                sncosmo_filter = 'lssti'
-            elif band == 'z':
-                sncosmo_filter = 'lsstz'
-            elif band == 'y':
-                sncosmo_filter = 'lssty'
+            sncosmo_filter = 'lsst'+band
 
         elif telescope == 'JWST':
             sncosmo_filter = band
+
+        elif telescope == 'HST':
+            sncosmo_filter = band
+
+        elif telescope == 'DECam':
+            sncosmo_filter = 'des'+band
 
         # Create elif telescope == 'ZTF'
 
@@ -352,7 +349,7 @@ class Supernova:
         M_observed = - Alpha * x1 + Beta * c + M_corrected
         return M_observed
 
-    def light_curve(self, x1=None, c=None, mw_ebv=None, host_rv=None, host_ebv=None, lens_rv=None, lens_ebv=None, int_scatter=True):
+    def light_curve(self, t0=None, x1=None, c=None, mw_ebv=None, host_rv=None, host_ebv=None, lens_rv=None, lens_ebv=None, int_scatter=True):
         """
         Samples light curve parameters from stretch and colour distributions based on Scolnic & Kessler (2016)
         and returns a type Ia SN light curve model from SNcosmo using the SALT3 model.
@@ -394,6 +391,9 @@ class Supernova:
         if host_ebv is None:
             host_ebv = np.random.uniform(0, 0.2)
 
+        if t0 is None:
+            t0 = 0.
+
         # Sample stretch parameter
         if x1 is None:
             x1 = stats.skewnorm.rvs(-8.241, 1.2311, 1.6712)
@@ -414,7 +414,7 @@ class Supernova:
                               effect_frames=['obs', 'free', 'rest'])
         
         # Set model parameters
-        model.set(z=self.z_source, t0=0.0, x1=x1, c=c, mwebv=mw_ebv, lensz=self.z_lens, lensebv=lens_ebv, hostebv=host_ebv)
+        model.set(z=self.z_source, t0=t0, x1=x1, c=c, mwebv=mw_ebv, lensz=self.z_lens, lensebv=lens_ebv, hostebv=host_ebv)
         model.set_source_peakabsmag(M_observed, 'bessellb', 'ab', cosmo=self.cosmo)
         x0 = model.get('x0')
         model.set(x0=x0)
@@ -450,7 +450,7 @@ class Supernova:
 
         return m_lens
 
-    def get_app_magnitude(self, model, day, macro_mag, td_images, micro_day, telescope_class, band, lim_mag, add_microlensing):
+    def get_app_magnitude(self, model, day, macro_mag, td_images, micro_day, telescope_class, band, lim_mag, target_snr, add_microlensing):
         """
         Calculate the apparent magnitude + error for each supernova image at a certain time stamp.
 
@@ -482,16 +482,20 @@ class Supernova:
         flux_micro = 10**((zeropoint - app_mag_ps)/2.5)
         flux_ps = model.bandflux(sncosmo_filter, time=day - td_images, zp=zeropoint, zpsys='ab')
 
-        # Calculate limiting flux from zero point and limiting magnitude
-        lim_flux = 10**((zeropoint - lim_mag)/2.5)
-        flux_error = lim_flux / 5
-
         # Apply macro magnification to image fluxes
         flux_ps *= macro_mag
         flux_ps[flux_ps < 0.0] = 0.0
+
+        if np.isin(telescope_class.telescope, ['JWST', 'HST']):
+            # Calculate flux error from target SNR
+            flux_error = flux_ps / target_snr
+        else:
+            # Calculate limiting flux from zero point and limiting magnitude
+            lim_flux = 10**((zeropoint - lim_mag)/2.5)
+            flux_error = lim_flux / 5
+
         # Perturb the flux according to the flux error (from the sky signal)
         flux_perturbation = np.random.normal(loc=0, scale=abs(flux_error))
-
         new_flux_ps = flux_ps + flux_perturbation  # Remove!!!
         new_flux_ps[new_flux_ps < 0.0] = 0.0
         new_flux_ps[flux_ps <= flux_error] = 0.0

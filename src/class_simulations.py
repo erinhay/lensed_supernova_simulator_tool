@@ -127,11 +127,11 @@ class Simulations:
                 if add_microlensing:
                     micro_day = microlensing.micro_snapshot(micro_contributions, td_images, t, band)
                     app_mag_model = supernova.get_app_magnitude(model, t, macro_mag, td_images, micro_day, lsst, band,
-                                                           lim_mag_band, add_microlensing)[7]
+                                                                lim_mag_band, None, add_microlensing)[7]
                 else:
                     micro_day = np.nan
                     app_mag_model = supernova.get_app_magnitude(model, t, macro_mag, td_images, micro_day, lsst, band,
-                                                                lim_mag_band, add_microlensing)[1]
+                                                                lim_mag_band, None, add_microlensing)[1]
 
                 app_mag_unresolved_temp = supernova.get_mags_unresolved(app_mag_model, lsst, [band], lim_mag_band, filler=None)[0]
 
@@ -352,10 +352,10 @@ class Simulations:
                     # Calculate apparent magnitudes
                     app_mag_model, app_mag_obs, app_mag_error, snr, app_mag_micro, app_mag_micro_error, \
                     snr_micro, _ = supernova.get_app_magnitude(model, day, macro_mag, td_images, micro_day, lsst, band,
-                                                            lim_mag, add_microlensing)
+                                                               lim_mag, None, add_microlensing)
 
                     app_mag_model_i, app_mag_obs_i, _, _, app_mag_obs_micro_i, _, _, app_mag_model_i_micro = \
-                        supernova.get_app_magnitude(model, day, macro_mag, td_images, micro_day_i, lsst, 'i', 24.0, add_microlensing)
+                        supernova.get_app_magnitude(model, day, macro_mag, td_images, micro_day_i, lsst, 'i', 24.0, None, add_microlensing)
 
                 if day > end_sn:
                     break
